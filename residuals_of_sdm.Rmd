@@ -1,6 +1,6 @@
 ---
-title: "Untitled"
-author: "JEON"
+title: "residuals of SDM"
+author: "JEON, CHEONGOK"
 date: '2020 12 11 '
 output: html_document
 ---
@@ -9,17 +9,198 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+# Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Background
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## Data wrangling
 
-```{r cars}
-summary(cars)
+```{r install packages}
+#----------------------------
+# packages
+#----------------------------
+install.packages("spocc", dependencies = TRUE) #Data bringer
+install.packages("MicroNiche") # Levin's Niche breadth
+install.packages("mapr") #Map visualize for spocc
+install.packages("stars", "gbm", "sf", "sp", "raster") #GIS
+
 ```
 
-## Including Plots
+```{r parallel computing}
+install.packages('parallel') #parallel computing
+install.packages(c('foreach', 'doParallel'))
+cores <- parallel::detectCores() - 1
+cluster <- parallel::makeCluster(spec = cores)
+doParallel::registerDoParallel(cl = cluster)
+foreach::foreach(i = 1:len, .combines = c) %dopar% {
+  ...
+}
+future::plan(multisession)
+stopCluster()
+install.packages('doSNOW')
+install.packages("furrr")
+```
+
+
+
+```{r package library}
+library(spocc)
+library(gbm)
+library(stars)
+library(sf)
+library(sp)
+library(MicroNiche)
+library(ggplot2)
+library(dplyr)
+library(rgbif)
+library(tidyverse)
+library(rJava)
+library(vegan)
+library(dismo)
+library(tidymodels)
+library(ggcorrplot)
+library(FactoMineR)
+library(factoextra)
+library(purrr)
+library(furrr)
+library(listviewer)
+library(tictoc)
+
+library(parallel)
+library(foreach)
+library(doParallel)
+library(doSNOW)
+```
+
+```{r get/set directroy}
+#----------------------------
+# get/set directory
+#----------------------------
+jadeDir <- "G:/내 드라이브/졸업논문/wrangling"
+
+desktopDir <- "E:/residual_sdm"
+
+gitprojDir <- "C:/Users/Jeon/Documents/residualsofsdm"
+
+setwd(jadeDir)
+
+setwd(desktopDir)
+
+setwd(gitprojDir)
+
+getwd()
+
+```
+
+```{r read csv OPTION 1. species_taxon_gbif.csv(TAXON FAMILY TREE)}
+#----------------------------
+# read target species list-op1
+#----------------------------
+specieslist_mammal<- readr::read_csv("species_mammal_gbif.csv", col_names = T, skip = 1)
+list_origin_mammal <- specieslist_mammal[!specieslist_mammal=='']
+
+specieslist_reptile<- readr::read_csv("species_reptile_gbif.csv", col_names = T, skip = 1)
+list_origin_reptile <- specieslist_reptile[!specieslist_reptile=='']
+
+specieslist_amphibian<- readr::read_csv("species_amphibia_gbif.csv", col_names = T, skip = 1)
+list_origin_amphibian <- specieslist_amphibian[!specieslist_amphibian=='']
+
+specieslist_aves<- readr::read_csv("species_aves_gbif.csv", col_names = T, skip = 1)
+list_origin_aves <- specieslist_aves[!specieslist_aves=='']
+```
+
+```{r read csv OPTION 2. species_taxon.csv(JUST TAXON KEY n SPECIES COLUMM)}
+#----------------------------
+# read target species list-op2
+#----------------------------
+specieslist_mammal<- readr::read_csv("E:/residual_sdm/species_MAMMAL.csv", col_names = T)
+list_origin_mammal <- specieslist_mammal$scientificName
+
+specieslist_reptile<- readr::read_csv("E:/residual_sdm/species_REPTILE.csv", col_names = T)
+list_origin_reptile <- specieslist_reptile$scientificName
+
+specieslist_amphibian<- readr::read_csv("E:/residual_sdm/species_AMPHIBIAN.csv", col_names = T)
+list_origin_amphibian <- specieslist_amphibian$scientificName
+
+specieslist_aves<- readr::read_csv("E:/residual_sdm/species_AVES.csv", col_names = T)
+list_origin_aves <- specieslist_aves$scientificName
+
+```
+
+```{r etc. taxon key}
+#Get taxon key to use rgbif
+csv_AVES <- readr::read_csv("species_AVES.csv")
+taxon_AVES <- as.vector(csv_AVES$taxon_key)
+
+csv_MAMMALIA <- readr::read_csv("species_MAMMALIA.csv")
+taxon_MAMMAL <- as.vector(csv_MAMMALIA$taxon_key)
+
+csv_REPTILE <- readr::read_csv("species_REPTILE.csv")
+taxon_REPTILE <- as.vector(csv_REPTILE$taxon_key)
+
+csv_AMPHIBIAN <- readr::read_csv("species_AMPHIBIAN.csv")
+taxon_AMPHIBIAN <- as.vector(csv_AMPHIBIAN$taxon_key)
+
+for (i in taxon_AVES){AVES <- occ_download(pred("taxonKey", i), pred("hasCoordinate", TRUE))} #3limit
+```
+
+```{r occ data OPTION 1.  }
+#----------------------------
+# GET OCCURENCE DATA FROM GBIF
+#---------------------------- 
+AVES <- occ_download(pred("taxonKey", taxon_AVES), pred("hasCoordinate", TRUE))
+AMPHIBIA <- occ_download(pred("taxonKey", 131), pred("hasCoordinate", TRUE))
+MAMMAL <- occ_download(pred("taxonKey", 359), pred("hasCoordinate", TRUE))
+REPTILE <- occ_download(pred("taxonKey", 358), pred("hasCoordinate", TRUE))
+
+ARACHNIDA <- occ_download(pred("taxonKey", 367), pred("hasCoordinate", TRUE))
+INSECTA <- occ_download(pred("taxonKey", 216), pred("hasCoordinate", TRUE))
+Malacostraca <- occ_download(pred("taxonKey", 229), pred("hasCoordinate", TRUE))
+CHILOPODA <- occ_download(pred("taxonKey", 360), pred("hasCoordinate", TRUE))
+
+gbif_mammal<- occ_download(pred("scientificName", 'Ursus americanus'), pred('hasCoordinate', TRUE), format = 'simple_csv')
+gbif_mammal2 <- occ_download_datasets("0128483-200613084148143", limit = 1000, start = 1)
+
+gbif_mammal<- occ_download(pred_in("scientificName", list_origin_mammal), pred('hasCoordinate', TRUE))
+occ_download_get("0128483-200613084148143", path = "F:/residual_sdm", overwrite = T)
+occ_download_get("0128483-200613084148143", path = "F:/residual_sdm", overwrite = T)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+# Model interpretation
 
 You can also embed plots, for example:
 
@@ -28,3 +209,7 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+# Discussion
+
+## 
