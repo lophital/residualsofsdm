@@ -11,9 +11,36 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-## Background
+## 배경 Background
 
-## Data wrangling
+지금까지 다변량 분석과 공간적 자기상관성, Geostatistics에 대해 공부했다. 
+이번 학습 목표는 종 분포 모형, 기계학습에서의 공간적 자기상관성이다. 
+
+
+### 연구 절차
+연구 절차는 다음의 단계로 이루어진다.
+
+1. 탐색적 자료 분석
+데이터를 전처리하고 시각화하여 데이터의 특징을 살펴봄. 
+PCA, t-SNE, UMAP을 통해 수집한 포인트 데이터와 환경 변수의 관계를 확인, 연구 방법 계획.
+
+2. 모델 구성 
+모델에 투입되는 자료의 특성을 반영해 Feature를 조작.
+이후 모델 결과를 살펴보며 변수를 조절.
+
+3. 최종 모델 평가
+모델 평가와 해석
+
+4. 
+
+
+### 공간 통계에의 공간적 자기 상관성 Spatial Autocorrelation in spatial statistics
+
+### 기계학습에서의 공간적 자기상관성 Spatial Autocorrelation in ML
+
+### 종 분포 모형에서의 공간적 자기상관성 Spatial Autocorrelation in SDM
+
+## 데이터 전처리 Data wrangling
 
 ```{r install packages}
 #----------------------------
@@ -188,19 +215,35 @@ occ_download_get("0128483-200613084148143", path = "F:/residual_sdm", overwrite 
 ```{r}
 
 ```
+# 탐색적 자료 분석 Exploratory Data Analysis
+
 ```{r}
 
 ```
 ```{r}
 
 ```
+
+## Initial Feature Engineering
+
 ```{r}
 
 ```
+
+## Model Evaluation
+
+## More Feature Engineering
+
+## Refined Models
+
+# 최종 모델 평가 Final Model Evaluation
+
 ```{r}
 
 ```
-# Model interpretation
+
+
+# 모델 해석 Model interpretation
 
 You can also embed plots, for example:
 
@@ -210,6 +253,23 @@ plot(pressure)
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
-# Discussion
+# 토론 Discussion
 
-## 
+## 추가 연구 Further study 
+```{r}
+install.packages("sampbias")
+```
+
+```{r}
+library(stacks)
+stacks::
+install.packages("RSDB")
+install.packages("virtualspecies")
+install.packages("BAT") #biodiversity
+install.packages("lime") #xAI
+install.packages("SDMtune")
+
+```
+
+# Reference
+
