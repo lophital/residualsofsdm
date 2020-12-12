@@ -117,12 +117,15 @@ library(doSNOW)
 jadeDir <- "G:/내 드라이브/졸업논문/wrangling"
 
 desktopDir <- "E:/residual_sdm"
+desktopRmdDir <- "E:/residualsofsdm"
 
 gitprojDir <- "C:/Users/Jeon/Documents/residualsofsdm"
 
 setwd(jadeDir)
 
 setwd(desktopDir)
+
+setwd(desktopRmdDir)
 
 setwd(gitprojDir)
 
@@ -213,9 +216,6 @@ OCCDATA_AMPHIBIAN <- occ_data(taxonKey = taxon_AMPHIBIAN, hasCoordinate = T, lim
 issue ="ZERO_COORDINATE","COORDINATE_REPROJECTED", "COORDINATE_REPROJECTION_SUSPICIOUS","PERSUMED_NEGATED_LATITUDE","PERSUMED_NEGATED_LONGITUDE","PERSUMED_SWAPPED_COORDINATE","RECORDED_DATE_INVALID","RECORDED_DATE_UNLIKELY","TAXON_MATCH_HIGHERRANK",
 "TAXON_MATCH_NONE"
 
-tic("model fitting") # tic3 시작 
-model <- lm(y ~ X) 
-toc() # tic3 종료
 ```
 
 ```{r spocc::occ get occurrence}
@@ -405,19 +405,11 @@ extract_spatial_mammal_lapply_furrr <- furrr::future_map(.x = list_spatial_mamma
 toc()
 ```
 
-But We didn't standardized them.  
-Let's make another standardized data set.  
-```{r standardized extracted points values}
-standard <- function(x){scale(x, center = T, scale = T)}
+so, let's check the extracted results.
+How much NAs? What's their range? What's different with standardize?
 
-standard_amphibian <- extract_spatial_amphibian_lapply %>%  map(.f = scale(., center = T, scale = T))
-standard_amphibian <- map(extract_spatial_amphibian_lapply, standard) 
-standard_amphibian_df <- map(standard_amphibian, as.data.frame)
-
-
-```
-
-```{r}
+1. NAs
+```{r NAs Check}
 a <- map(top4_pc1_amphibian_sd, as.tibble)
 b <- map(top4_pc1_amphibian, as.tibble)
 map2(a,b, all_equal)
@@ -435,7 +427,25 @@ map(standard_amphibian_naomit, a)
 z <- na.omit(d$Rana_temporaria)
 
 a(d) 
+
+standard_amphibian_na <- map(standard_amphibian, na.omit)
+
 ```
+
+Before proceed to visualize, We didn't standardized them.  
+Let's make another standardized data set. 
+
+
+```{r standardized extracted points values}
+standard <- function(x){scale(x, center = T, scale = T)}
+
+standard_amphibian <- extract_spatial_amphibian_lapply %>%  map(.f = scale(., center = T, scale = T))
+standard_amphibian <- map(extract_spatial_amphibian_lapply, standard) 
+standard_amphibian_df <- map(standard_amphibian, as.data.frame)
+
+
+```
+
 
 
 ```{r PCA extracted points with FactoMineR::PCA }
@@ -862,6 +872,61 @@ Top 4 variable really mattered for MAXENT model?
 Does standardized matter? PCA? Factor loading?
 
 How much threshold will be good to caculate?
+
+
+```{r extracted value visualize}
+
+```
+
+
+
+Old face is name face. Classic PCA is nice as well.  
+
+
+```{r}
+
+```
+
+
+t-SNE was fancy for last few years. Check it too.  
+
+```{r}
+
+```
+
+But UMAP is even more fancier these days.
+
+```{r}
+
+```
+
+Don't forget the environmental grid.
+```{r}
+dismo::gridSample()
+
+```
+
+
+
+```{r}
+
+```
+
+Before PCA, Let's check correlation matrix of variables
+```{r}
+extract_spatial_amphibian_lapply[[1]] %>% 
+  mutate_if(is.numeric, scale) %>% 
+  select_if(is.numeric) %>% 
+  correlate() %>% # (2)
+  shave(upper = TRUE) %>% # (3)
+  stretch(na.rm = TRUE) %>% 
+  arrange(-r) %>% 
+  DT::datatable() %>% 
+  DT::formatRound("r", digits = 2)
+
+```
+
+
 ```{r}
 dismo::threshold()
 ```
