@@ -87,7 +87,6 @@ library(sf)
 library(sp)
 library(MicroNiche)
 library(ggplot2)
-library(dplyr)
 library(rgbif)
 library(tidyverse)
 library(rJava)
@@ -97,17 +96,11 @@ library(tidymodels)
 library(ggcorrplot)
 library(FactoMineR)
 library(factoextra)
-library(purrr)
 library(furrr)
 library(listviewer)
 library(tictoc)
 library(corrr)
 library(mapr)
-
-library(parallel)
-library(foreach)
-library(doParallel)
-library(doSNOW)
 ```
 
 ```{r get/set directroy, eval=FALSE, include=FALSE}
@@ -154,16 +147,16 @@ list_origin_aves <- specieslist_aves[!specieslist_aves=='']
 #----------------------------
 # read target species list-op2
 #----------------------------
-specieslist_mammal<- readr::read_csv("E:/residual_sdm/species_MAMMAL.csv", col_names = T)
+specieslist_mammal<- readr::read_csv("species_MAMMAL.csv", col_names = T)
 list_origin_mammal <- specieslist_mammal$scientificName
 
-specieslist_reptile<- readr::read_csv("E:/residual_sdm/species_REPTILE.csv", col_names = T)
+specieslist_reptile<- readr::read_csv("species_REPTILE.csv", col_names = T)
 list_origin_reptile <- specieslist_reptile$scientificName
 
-specieslist_amphibian<- readr::read_csv("E:/residual_sdm/species_AMPHIBIAN.csv", col_names = T)
+specieslist_amphibian<- readr::read_csv("species_AMPHIBIAN.csv", col_names = T)
 list_origin_amphibian <- specieslist_amphibian$scientificName
 
-specieslist_aves<- readr::read_csv("E:/residual_sdm/species_AVES.csv", col_names = T)
+specieslist_aves<- readr::read_csv("species_AVES.csv", col_names = T)
 list_origin_aves <- specieslist_aves$scientificName
 
 ```
@@ -234,17 +227,47 @@ toc()
 ```
 
 
-```{r mapping occurences}
-mapr::map_ggplot(list_longlat_amphibian)
-mapr::map_ggplot(out_reptile$gbif$data$Alligator_mississippiensis)
-list_longlat_mammal <- rep(list('empty'), length(1))
+```{r mapping occurences with mapr::mapggplot}
+map(out_reptile$gbif$data, map_ggplot)
+```
+```{r mapping occurences with mapr::mapggplot}
+map(out_aves$gbif$data, map_ggplot)
+```
 
+![Terrapene carolina, eastern box turtle](95.jpg)
+```{r}
+mapr::map_ggplot(out_reptile$gbif$data$Terrapene_carolina, map = "usa", size = 1)
+```
+
+
+
+```{r save out_data}
+selectuseful <- function(x){dplyr::select(x, 1:62)}
+
+out_mammal_names <- paste0("E:/out/mammal/out_", list_origin_mammal, ".csv")
+out_mammal_forsave <- map(out_mammal$gbif$data, selectuseful) 
+map2(out_mammal_forsave, out_mammal_names, write_csv)
+
+out_reptile_names <- paste0("E:/out/reptile/out_", list_origin_reptile, ".csv")
+out_reptile_forsave <- map(out_reptile$gbif$data, selectuseful) 
+map2(out_reptile_forsave, out_reptile_names, write_csv)
+
+out_amphibian_names <- paste0("E:/out/amphibian/out_", list_origin_amphibian, ".csv")
+out_amphibian_forsave <- map(out_amphibian$gbif$data, selectuseful) 
+map2(out_amphibian_forsave, out_amphibian_names, write_csv)
+
+out_aves_names <- paste0("E:/out/aves/out_", list_origin_aves, ".csv")
+out_aves_forsave <- map(out_aves$gbif$data, selectuseful) 
+map2(out_aves_forsave, out_aves_names, write_csv)
 
 
 ```
 
 
+
+
 ```{r cbind longlat}
+list_longlat_mammal <- rep(list('empty'), length(1))
 for (i in 1:length(1)){
   list_longlat_mammal[[i]] <- sapply(
     out_mammal$gbif$data,
@@ -338,21 +361,21 @@ list_spatial_aves <- sapply(
 
 ```{r Spatial Points visualize with leaflet}
 
-leaflet(quakes) %>%
+leaflet(list_xy_amphibian$Rana_temporaria) %>%
 addTiles() %>%
-addMarkers(~long, ~lat, clusterOptions = markerClusterOptions())
+addMarkers(lng=~longitude, lat=~latitude, clusterOptions = markerClusterOptions())
 
 ```
 
 
 ```{r}
-bios <- list.files(pattern="*.tif")
+bios <- paste0("E:/residual_sdm/", list.files(pattern="*.tif", path = "E:/residual_sdm"))
 stackbio <- stack(bios)
 ```
 
 
 
-```{r extract}
+```{r extract, eval=FALSE, include=FALSE}
 #----------------------------
 # extract bio + spatial points 
 #----------------------------
@@ -394,16 +417,49 @@ toc()
 
 ```
 
-```{r furrr::future_map for speedy extract}
+```{r furrr::future_map for speedy extract, eval=FALSE, include=FALSE}
 #Furrr::future_map for speedy extract
-
-future::plan(multisession)
 extracting_stackbio <- function(x) {extract(stackbio, x)}
+pb <- progress::progress_bar$new(total = 100)
+purrr::map(x, ~{pb$tick(); Sys.sleep(0.1)})
 
-tic("extract_furrr")
-extract_spatial_mammal_lapply_furrr <- furrr::future_map(.x = list_spatial_mammal, .f = extracting_stackbio)
+
+tic("extract_furrr_mammal")
+extract_spatial_mammal_furrr <- furrr::future_map(.x = list_spatial_mammal, .f = extracting_stackbio)
+toc()
+
+tic("extract_furrr_reptile")
+extract_spatial_reptile_furrr <- furrr::future_map(.x = list_spatial_reptile, .f = extracting_stackbio)
+toc()
+
+tic("extract_furrr_amphibian")
+extract_spatial_amphibian_furrr <- furrr::future_map(.x = list_spatial_amphibian, .f = extracting_stackbio)
+toc()
+
+tic("extract_furrr_aves")
+extract_spatial_aves_furrr <- furrr::future_map(.x = list_spatial_aves, .f = extracting_stackbio, .options = furrr_options(seed = T))
 toc()
 ```
+
+```{r save extracted values}
+
+extract_mammal_names <- paste0("E:/extract/mammal/extract_", list_origin_mammal, ".csv")
+extract_mammal_forsave <- map(extract_spatial_mammal_lapply, data.frame) 
+map2(extract_mammal_forsave, extract_mammal_names, write_csv)
+
+extract_reptile_names <- paste0("E:/extract/reptile/extract_", list_origin_reptile, ".csv")
+extract_reptile_forsave <- map(extract_spatial_reptile_lapply, data.frame) 
+map2(extract_reptile_forsave, extract_reptile_names, write_csv)
+
+
+extract_aves_names <- paste0("E:/extract/aves/extract_", list_origin_aves, ".csv")
+extract_aves_forsave <- map(extract_spatial_aves_furrr, data.frame) 
+map2(extract_aves_forsave, extract_aves_names, write_csv)
+
+
+```
+
+
 
 so, let's check the extracted results.
 How much NAs? What's their range? What's different with standardize?
@@ -474,7 +530,7 @@ list_PCA_amphibian <- lapply(
 )
 
 list_PCA_aves <- lapply(
-  extract_spatial_aves_lapply,
+  extract_spatial_aves_furrr,
   function(x){
     PCA(x)
   }
@@ -588,6 +644,19 @@ nb_amphibian_sd <- nb_amphibian_pc1_df_sd + nb_amphibian_pc2_df_sd
 
 ```
 
+Do really nb is different with taxons?
+
+```{r save nb}
+nb_aves_df <- data.frame(nb_aves)
+nb_reptile_df <- data.frame(nb_reptile)
+nb_mammal_df <- data.frame(nb_mammal)
+
+write_csv(nb_aves_df, "E:/nichebreadth/nb_aves_df.csv")
+write_csv(nb_reptile_df, "E:/nichebreadth/nb_reptile_df.csv")
+write_csv(nb_mammal_df, "E:/nichebreadth/nb_mammal_df.csv")
+
+```
+
 ```{r TOP 4 PCA Variables Visualize}
 pca_var_g <- fviz_pca_var(pkmon_pca, select.var = list(cos2 = 0.5), repel = TRUE)
 
@@ -646,7 +715,7 @@ for (i in seq_along(1:length(list_PCA_amphibian_standard))){
 
 paste2 <- function(x){paste(x, ".tif", sep = "")}
 
-paste(top4_pc1_mammal[[1]],".tif", sep = "")
+
 
 ######################################################
 top4_pc1_mammal.tif <- top4_pc1_mammal %>% map(paste2)
@@ -735,6 +804,15 @@ bios_mammal <- map(bios_mammal, brick)
 bios_amphibian <- list.files(path = "J:/", pattern="*.gri")
 bios_amphibian <- paste0("J:/amphibian/amphibian_bios_", list_origin_amphibian, ".gri")
 bios_amphibian <- map(bios_amphibian, brick)
+
+bios_aves <- list.files(path = "J:/", pattern="*.gri")
+bios_aves <- paste0("J:/aves_bios_", list_origin_aves, ".gri")
+bios_aves <- map(bios_aves, brick)
+
+bios_reptile <- list.files(path = "J:/", pattern="*.gri")
+bios_reptile <- paste0("J:/mammal_bios_", list_origin_mammal, ".gri")
+bios_reptile <- map(bios_mammal, brick)
+
 
 ```
 
