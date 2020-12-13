@@ -68,8 +68,11 @@ cores <- parallel::detectCores() - 1
 cluster <- parallel::makeCluster(spec = cores)
 doParallel::registerDoParallel(cl = cluster)
 future::plan(multisession)
-stopCluster()
 
+```
+
+```{r}
+stopCluster()
 ```
 
 본 연구는 주요 척추동물 분류군 포유류, 파충류, 양서류, 조류 총 400여 종에 대한 분석을 실시한다.
@@ -263,6 +266,48 @@ map2(out_aves_forsave, out_aves_names, write_csv)
 
 ```
 
+```{r read out_data}
+out_mammal_saved <- map(out_mammal_names, read_csv)
+out_reptile_saved <- map(out_reptile_names, read_csv)
+out_amphibian_saved <- map(out_amphibian_names, read_csv)
+out_aves_saved <- map(out_aves_names, read_csv)
+
+list_longlat_mammal <- rep(list('empty'), length(1))
+for (i in 1:length(1)){
+  list_longlat_mammal[[i]] <- sapply(
+    out_mammal_saved,
+    function(x){
+      cbind(x[,2:3])
+      })
+}
+
+list_longlat_reptile <- rep(list('empty'), length(1))
+for (i in 1:length(1)){
+  list_longlat_reptile[[i]] <- sapply(
+    out_reptile_saved,
+    function(x){
+      cbind(x[,2:3])
+      })
+}
+list_longlat_amphibian <- rep(list('empty'), length(1))
+for (i in 1:length(1)){
+  list_longlat_amphibian[[i]] <- sapply(
+    out_amphibian_saved,
+    function(x){
+      cbind(x[,2:3])
+      })
+}
+list_longlat_aves <- rep(list('empty'), length(1))
+for (i in 1:length(1)){
+  list_longlat_aves[[i]] <- sapply(
+    out_aves_saved,
+    function(x){
+      cbind(x[,2:3])
+      })
+}
+
+```
+
 
 
 
@@ -451,10 +496,33 @@ extract_reptile_names <- paste0("E:/extract/reptile/extract_", list_origin_repti
 extract_reptile_forsave <- map(extract_spatial_reptile_lapply, data.frame) 
 map2(extract_reptile_forsave, extract_reptile_names, write_csv)
 
-
 extract_aves_names <- paste0("E:/extract/aves/extract_", list_origin_aves, ".csv")
 extract_aves_forsave <- map(extract_spatial_aves_furrr, data.frame) 
 map2(extract_aves_forsave, extract_aves_names, write_csv)
+
+
+```
+.
+```{r read extracted values}
+
+extract_mammal_saved <- map(extract_mammal_names, read_csv)
+extract_reptile_saved <- map(extract_reptile_names, read_csv)
+extract_aves_saved <- map(extract_aves_names, read_csv)
+```
+
+```{r NAs point removal}
+na_lgl_mammal <-  map(extract_mammal_saved, is.na)
+
+na_aves <- extract_aves_saved %>% map(is.na) %>% map(sum)
+na_mammal <- extract_mammal_saved %>% map(is.na) %>% map(sum)
+
+randomPointsformap2 <- function(x,y){randomPoints(x, 1000, y)}
+
+points_mammal_na <- map2(top4_pc2_mammal.tif.stack, list_spatial_mammal, randomPointsformap2)
+
+train_fold5_aves <- list()
+for (i in seq_along(1:length(list_spatial_aves))){ 
+                      train_fold5_aves[[i]] <- list_spatial_aves[[i]][fold5_aves[[i]] != 1, ]}
 
 
 ```
@@ -485,6 +553,8 @@ z <- na.omit(d$Rana_temporaria)
 a(d) 
 
 standard_amphibian_na <- map(standard_amphibian, na.omit)
+
+map(extract_spatial_aves_furrr, na.omit)
 
 ```
 
@@ -531,6 +601,40 @@ list_PCA_amphibian <- lapply(
 
 list_PCA_aves <- lapply(
   extract_spatial_aves_furrr,
+  function(x){
+    PCA(x)
+  }
+)
+
+```
+
+```{r PCA extracted points from saved}
+#----------------------------
+# PCA extracted points - saved
+#----------------------------
+list_PCA_mammal <- lapply(
+  extract_mammal_saved,
+  function(x){
+    PCA(x)
+  }
+)
+
+list_PCA_reptile <- lapply(
+  extract_reptile_saved,
+  function(x){
+    PCA(x)
+  }
+)
+
+list_PCA_amphibian <- lapply(
+  extract_spatial_amphibian_lapply,
+  function(x){
+    PCA(x)
+  }
+)
+
+list_PCA_aves <- lapply(
+  extract_aves_saved,
   function(x){
     PCA(x)
   }
@@ -713,7 +817,7 @@ for (i in seq_along(1:length(list_PCA_amphibian_standard))){
 
 ```{r stacking rasters }
 
-paste2 <- function(x){paste(x, ".tif", sep = "")}
+paste2 <- function(x){paste("E:/residual_sdm/" ,x, ".tif", sep = "")}
 
 
 
@@ -810,13 +914,15 @@ bios_aves <- paste0("J:/aves_bios_", list_origin_aves, ".gri")
 bios_aves <- map(bios_aves, brick)
 
 bios_reptile <- list.files(path = "J:/", pattern="*.gri")
-bios_reptile <- paste0("J:/mammal_bios_", list_origin_mammal, ".gri")
-bios_reptile <- map(bios_mammal, brick)
+bios_reptile <- paste0("J:/reptile_bios_", list_origin_reptile, ".gri")
+bios_reptile <- map(bios_reptile, brick)
 
 
 ```
 
-```{r it's modeling time: dismo::kfold}
+```{r it's modeling time dismo::kfold}
+
+aves_na_TF <- map_lgl(extract_spatial_aves_furrr, na.omit)
 
 fold5 <- function(x){kfold(x, k=5)}
 fold4 <- function(x){kfold(x, k=4)}
@@ -825,6 +931,7 @@ fold4 <- function(x){kfold(x, k=4)}
 fold5_amphibian <- map(list_spatial_amphibian, fold5)
 fold5_aves <- map(list_spatial_aves, fold5)
 fold5_mammal <- map(list_spatial_mammal, fold5)
+fold5_reptile <- map(list_spatial_reptile, fold5)
 
 test_fold5_amphibian <- list()
 for (i in seq_along(1:length(list_spatial_amphibian))){ 
@@ -840,9 +947,9 @@ train_fold5_amphibian <- list()
 for (i in seq_along(1:length(list_spatial_amphibian))){ 
                       train_fold5_amphibian[[i]] <- list_spatial_amphibian[[i]][fold5_amphibian[[i]] != 1, ]}
 
-train_fold5_aves <- list()
-for (i in seq_along(1:length(list_spatial_aves))){ 
-                      train_fold5_aves[[i]] <- list_spatial_aves[[i]][fold5_aves[[i]] != 1, ]}
+train_fold5_reptile <- list()
+for (i in seq_along(1:length(list_spatial_reptile))){ 
+                      train_fold5_reptile[[i]] <- list_spatial_reptile[[i]][fold5_reptile[[i]] != 1, ]}
 
 train_fold5_mammal <- list()
 for (i in seq_along(1:length(list_spatial_mammal))){ 
@@ -856,7 +963,10 @@ model_amphibian_maxent <-  map2(bios_amphibian ,train_fold5_amphibian, maxent)
 
 model_aves_maxent <- map2(bios_aves, train_fold5_aves, maxent)
 
-model_mammal_maxent <- map2(bios_mammal, train_fold5_mammal, maxent)
+model_mammal_maxent <- future_map2(bios_mammal, train_fold5_mammal, maxent)
+
+model_reptile_maxent <- map2(bios_reptile, train_fold5_reptile, maxent)
+
 ```
 
 ```{r what was important varibles}
@@ -879,7 +989,7 @@ r<- dismo::predict(model_amphibian_maxent[[1]], bios_amphibian[[1]])
 
 predict_amphibian_maxent <- map2(model_amphibian_maxent, bios_amphibian, dismo::predict)
 
-predict_aves_maxent <- map2(model_aves_maxent, aves_bios, dismo::predict)
+predict_aves_maxent <- future_map2(model_aves_maxent, aves_bios, dismo::predict)
 
 ```
 
