@@ -823,8 +823,8 @@ fold4 <- function(x){kfold(x, k=4)}
 
 
 fold5_amphibian <- map(list_spatial_amphibian, fold5)
-
 fold5_aves <- map(list_spatial_aves, fold5)
+fold5_mammal <- map(list_spatial_mammal, fold5)
 
 test_fold5_amphibian <- list()
 for (i in seq_along(1:length(list_spatial_amphibian))){ 
@@ -834,6 +834,8 @@ test_fold5_aves <- list()
 for (i in seq_along(1:length(list_spatial_aves))){ 
                       test_fold5_aves[[i]] <- list_spatial_aves[[i]][fold5_aves[[i]] == 1, ]}
 
+test_
+
 train_fold5_amphibian <- list()
 for (i in seq_along(1:length(list_spatial_amphibian))){ 
                       train_fold5_amphibian[[i]] <- list_spatial_amphibian[[i]][fold5_amphibian[[i]] != 1, ]}
@@ -842,14 +844,19 @@ train_fold5_aves <- list()
 for (i in seq_along(1:length(list_spatial_aves))){ 
                       train_fold5_aves[[i]] <- list_spatial_aves[[i]][fold5_aves[[i]] != 1, ]}
 
+train_fold5_mammal <- list()
+for (i in seq_along(1:length(list_spatial_mammal))){ 
+                      train_fold5_mammal[[i]] <- list_spatial_mammal[[i]][fold5_mammal[[i]] != 1, ]}
+
 ```
 
 ```{r it's modeling time: dismo::maxent}
 
 model_amphibian_maxent <-  map2(bios_amphibian ,train_fold5_amphibian, maxent)
 
-model_aves_maxent <- map2(aves_bios, train_fold5_aves, maxent)
+model_aves_maxent <- map2(bios_aves, train_fold5_aves, maxent)
 
+model_mammal_maxent <- map2(bios_mammal, train_fold5_mammal, maxent)
 ```
 
 ```{r what was important varibles}
