@@ -171,6 +171,7 @@ taxon_AVES <- as.vector(csv_AVES$taxon_key)
 
 csv_MAMMALIA <- readr::read_csv("species_MAMMALIA.csv")
 taxon_MAMMAL <- as.vector(csv_MAMMALIA$taxon_key)
+sci_MAMMAL <- as.vector(csv_MAMMALIA$scientificName)
 
 csv_REPTILE <- readr::read_csv("species_REPTILE.csv")
 taxon_REPTILE <- as.vector(csv_REPTILE$taxon_key)
@@ -412,6 +413,11 @@ addMarkers(lng=~longitude, lat=~latitude, clusterOptions = markerClusterOptions(
 
 ```
 
+```{r}
+leaflet(list_xy_mammal$X27) %>%
+addTiles() %>%
+addMarkers(lng=~longitude, lat=~latitude)
+```
 
 ```{r}
 bios <- paste0("E:/residual_sdm/", list.files(pattern="*.tif", path = "E:/residual_sdm"))
@@ -511,7 +517,14 @@ extract_aves_saved <- map(extract_aves_names, read_csv)
 ```
 
 ```{r NAs point removal}
+na_lgl_mammal <-  map(extract_mammal_saved, complete.cases)
 na_lgl_mammal <-  map(extract_mammal_saved, is.na)
+
+list_spatial_mammal_na <- list()
+for (i in seq_along(1:length(list_spatial_mammal))){
+  list_spatial_mammal_na[[i]] <- list_spatial_mammal[[i]][na_lgl_mammal[[i]]]
+}
+
 
 na_aves <- extract_aves_saved %>% map(is.na) %>% map(sum)
 na_mammal <- extract_mammal_saved %>% map(is.na) %>% map(sum)
@@ -930,7 +943,7 @@ fold4 <- function(x){kfold(x, k=4)}
 
 fold5_amphibian <- map(list_spatial_amphibian, fold5)
 fold5_aves <- map(list_spatial_aves, fold5)
-fold5_mammal <- map(list_spatial_mammal, fold5)
+fold5_mammal <- map(list_spatial_mammal_na, fold5)
 fold5_reptile <- map(list_spatial_reptile, fold5)
 
 test_fold5_amphibian <- list()
@@ -941,7 +954,9 @@ test_fold5_aves <- list()
 for (i in seq_along(1:length(list_spatial_aves))){ 
                       test_fold5_aves[[i]] <- list_spatial_aves[[i]][fold5_aves[[i]] == 1, ]}
 
-test_
+test_fold5_mammal <- list()
+for (i in seq_along(1:length(list_spatial_mammal))){ 
+                      test_fold5_mammal[[i]] <- list_spatial_mammal_na[[i]][fold5_mammal[[i]] == 1, ]}
 
 train_fold5_amphibian <- list()
 for (i in seq_along(1:length(list_spatial_amphibian))){ 
@@ -952,8 +967,29 @@ for (i in seq_along(1:length(list_spatial_reptile))){
                       train_fold5_reptile[[i]] <- list_spatial_reptile[[i]][fold5_reptile[[i]] != 1, ]}
 
 train_fold5_mammal <- list()
-for (i in seq_along(1:length(list_spatial_mammal))){ 
-                      train_fold5_mammal[[i]] <- list_spatial_mammal[[i]][fold5_mammal[[i]] != 1, ]}
+for (i in seq_along(1:length(list_spatial_mammal_na))){ 
+                      train_fold5_mammal[[i]] <- list_spatial_mammal_na[[i]][fold5_mammal[[i]] != 1, ]}
+
+```
+
+```{r save the model}
+map(train_fold5_reptile, sp::as.)
+writeOGR(train_fold5_mammal[[1]], dsn = getwd(), driver = "ESRI Shapefile")
+
+savemodel <- function(x){save(x, file = model_mammal_names)}
+
+map(model_mammal_maxent, savemodel)
+
+model_mammal_names <- paste0("E:/model/mammal/model_",sci_MAMMAL,".rda")
+
+
+for (i in 1:51){save(model_mammal_maxent[[i]], file =  model_mammal_names[[i]])}
+
+save(model_mammal_maxent[[1]], file = model_mammal_names[1])
+
+saveRDS(model_mammal_maxent, file = "E:/gmm.rda")
+
+save(model_mammal_maxent, list = model_mammal_names, file = "E:/model")
 
 ```
 
@@ -963,7 +999,14 @@ model_amphibian_maxent <-  map2(bios_amphibian ,train_fold5_amphibian, maxent)
 
 model_aves_maxent <- map2(bios_aves, train_fold5_aves, maxent)
 
+
+
 model_mammal_maxent <- future_map2(bios_mammal, train_fold5_mammal, maxent)
+#Error in .local(x, p, ...) : only got:1random background point values; is there a layer with many NA values?
+
+
+bios_mammal <- bios_mammal
+
 
 model_reptile_maxent <- map2(bios_reptile, train_fold5_reptile, maxent)
 
@@ -972,7 +1015,7 @@ model_reptile_maxent <- map2(bios_reptile, train_fold5_reptile, maxent)
 ```{r what was important varibles}
 map(model_amphibian_maxent, plot)
 map(model_aves_maxent, plot)
-
+map(model_mammal_maxent, plot)
 ```
 
 ```{r AUC, ROC, }
@@ -991,6 +1034,7 @@ predict_amphibian_maxent <- map2(model_amphibian_maxent, bios_amphibian, dismo::
 
 predict_aves_maxent <- future_map2(model_aves_maxent, aves_bios, dismo::predict)
 
+predict_mammal_maxent <- map2(model_mammal_maxent, bios_mammal, dismo::predict)
 ```
 
 ```{r random points for background}
@@ -1003,14 +1047,30 @@ randompoints_ave1 <- randomPoints(aves_bios[[1]], 1000)
 # extract test point and make it data frame
 pointdf_test_fold5_amphibian <- map2(bios_amphibian, test_fold5_amphibian, raster::extract) %>% map(data.frame)
 pointdf_test_fold5_aves <- map2(aves_bios, test_fold5_aves, raster::extract) %>% map(data.frame)
+pointdf_test_fold5_mammal <- map2(bios_mammal, test_fold5_mammal, raster::extract) %>% map(data.frame)
+
+point_test_fold5_mammal <- map2(bios_mammal, test_fold5_mammal_sf, raster::extract)
+
+
+
+
+#remove god damn NAs... 
+extractNA_test_fold5_mammal <- map(test_fold5_mammal_sf,na.omit)
+
+
 
 # predict = model + test data
+predict <- dismo::predict()
+
 predict_amphibian_maxent <- map2(model_amphibian_maxent, pointdf_test_fold5_amphibian, predict)
 predict_aves_maxent <- map2(model_aves_maxent, pointdf_test_fold5_aves, predict) 
+predict_mammal_maxent <- map2(model_mammal_maxent, pointdf_test_fold5_mammal, predict)
 
 # as data frame
 pred_df_amp <- map(predict_amphibian_maxent, as.data.frame)
-pred_df_ave <- map(predict_aves_maxent, as.data.fram)
+pred_df_amp <- map(pred_df_amp) %>% mutate()
+pred_df_ave <- map(predict_aves_maxent, as.data.frame)
+pred_df_mam <- map(predict_mammal_maxent, as.data.frame)
 
 #save it for future
 predict_amphibian_names <- paste0("E:/pred/amphibian/predict_", list_origin_amphibian, ".csv")
@@ -1019,6 +1079,300 @@ predict_aves_names <- paste0("E:/pred/aves/predict_", list_origin_aves, ".csv")
 map2(pred_df_amp, predict_amphibian_names, write_csv)
 map2(pred_df_ave, predict_aves_names, write_csv)
 
+
+hist(predict_mammal_maxent[[1]])
+```
+```{r}
+map(predict_mammal_maxent, hist)
+```
+
+```{r predict don't have xy. prediction sp to sf, }
+as(test_fold5_mammal[[1]], "sf")
+
+test_fold5_mammal_sf <- map2(test_fold5_mammal, "sf", as)
+
+test_fold5_mammal_sf <- test_fold5_mammal_sf %>% map2(point_test_fold5_mammal, mutate)
+
+#convert df and give variable name "pred"
+predict_mammal_maxent <- map(predict_mammal_maxent, as.data.frame)
+
+rename_pred <- function(x){rename(x, "pred" = ".x[[i]]")}
+
+predict_mammal_maxent <- map(predict_mammal_maxent, rename_pred)
+
+sf_pred_fold5_mammal <- extractNA_test_fold5_mammal %>% map2(predict_mammal_maxent, mutate)
+
+sf_pred_fold5_mammal <- sf_pred_fold5_mammal %>% map(mutate)
+
+#bio, pred, resid. ALL WE NEED.
+
+sf_resid_fold5_mammal <- list()
+for (i in seq_along(1:length(sf_pred_fold5_mammal))){
+  sf_resid_fold5_mammal[[i]] <- mutate(sf_pred_fold5_mammal[[i]], residual_1 = 1 - pred,
+                                  residual_0.9 = 0.9 - pred,
+                                  residual_0.8 = 0.8 - pred,
+                                  residual_0.7 = 0.7 - pred,
+                                  residual_0.6 = 0.6 - pred,
+                                  residual_0.5 = 0.5 - pred)
+}
+
+
+
+
+
+```
+
+```{r get your Spatial Autocorrelation with gstat:: }
+
+aa <- st_as_sf(sf_pred_fold5_mammal[[2]][3])
+
+sf::write_sf(aa, "aa.shp")
+
+#Check variogram
+vario_pred <- function(x){gstat::variogram(pred~1, x)}
+vari_mammal <- map(sf_pred_fold5_mammal, vario_pred)
+plot(vari_mammal[[1]])
+
+
+#make neightbour to check Moran's I 
+library(spdep)
+
+
+knb1 <- function(x){nb2listw(knn2nb(knearneigh(x, k=1)))}
+knb2 <- function(x){nb2listw(knn2nb(knearneigh(x, k=2)))}
+knb3 <- function(x){nb2listw(knn2nb(knearneigh(x, k=3)))}
+knb4 <- function(x){nb2listw(knn2nb(knearneigh(x, k=4)))}
+knb5 <- function(x){nb2listw(knn2nb(knearneigh(x, k=5)))}
+knb6 <- function(x){nb2listw(knn2nb(knearneigh(x, k=6)))}
+knb7 <- function(x){nb2listw(knn2nb(knearneigh(x, k=7)))}
+knb8 <- function(x){nb2listw(knn2nb(knearneigh(x, k=8)))}
+knb9 <- function(x){nb2listw(knn2nb(knearneigh(x, k=9)))}
+knb10 <- function(x){nb2listw(knn2nb(knearneigh(x, k=10)))}
+
+
+knb1_mammal <- map(sf_pred_fold5_mammal, knb1)
+knb2_mammal <- map(sf_pred_fold5_mammal, knb2)
+knb3_mammal <- map(sf_pred_fold5_mammal, knb3)
+knb4_mammal <- map(sf_pred_fold5_mammal, knb4)
+knb5_mammal <- map(sf_pred_fold5_mammal, knb5)
+knb6_mammal <- map(sf_pred_fold5_mammal, knb6)
+knb7_mammal <- map(sf_pred_fold5_mammal, knb7)
+knb8_mammal <- map(sf_pred_fold5_mammal, knb8)
+knb9_mammal <- map(sf_pred_fold5_mammal, knb9)
+knb10_mammal <- map(sf_pred_fold5_mammal, knb10)
+
+
+moran_mammal_1k1 <- map2(map(sf_resid_fold5_mammal, 4), knb1_mammal, moran.test)
+moran_mammal_1k2 <- map2(map(sf_resid_fold5_mammal, 4), knb2_mammal, moran.test)
+moran_mammal_1k3 <- map2(map(sf_resid_fold5_mammal, 4), knb3_mammal, moran.test)
+moran_mammal_1k4 <- map2(map(sf_resid_fold5_mammal, 4), knb4_mammal, moran.test)
+moran_mammal_1k5 <- map2(map(sf_resid_fold5_mammal, 4), knb5_mammal, moran.test)
+moran_mammal_1k6 <- map2(map(sf_resid_fold5_mammal, 4), knb6_mammal, moran.test)
+moran_mammal_1k7 <- map2(map(sf_resid_fold5_mammal, 4), knb7_mammal, moran.test)
+moran_mammal_1k8 <- map2(map(sf_resid_fold5_mammal, 4), knb8_mammal, moran.test)
+moran_mammal_1k9 <- map2(map(sf_resid_fold5_mammal, 4), knb9_mammal, moran.test)
+moran_mammal_1k10 <- map2(map(sf_resid_fold5_mammal, 4), knb10_mammal, moran.test)
+
+moran_mammal_0.9k1 <- map2(map(sf_resid_fold5_mammal, 5), knb1_mammal, moran.test)
+moran_mammal_0.9k2 <- map2(map(sf_resid_fold5_mammal, 5), knb2_mammal, moran.test)
+moran_mammal_0.9k3 <- map2(map(sf_resid_fold5_mammal, 5), knb3_mammal, moran.test)
+moran_mammal_0.9k4 <- map2(map(sf_resid_fold5_mammal, 5), knb4_mammal, moran.test)
+moran_mammal_0.9k5 <- map2(map(sf_resid_fold5_mammal, 5), knb5_mammal, moran.test)
+moran_mammal_0.9k6 <- map2(map(sf_resid_fold5_mammal, 5), knb6_mammal, moran.test)
+moran_mammal_0.9k7 <- map2(map(sf_resid_fold5_mammal, 5), knb7_mammal, moran.test)
+moran_mammal_0.9k8 <- map2(map(sf_resid_fold5_mammal, 5), knb8_mammal, moran.test)
+moran_mammal_0.9k9 <- map2(map(sf_resid_fold5_mammal, 5), knb9_mammal, moran.test)
+moran_mammal_0.9k10 <- map2(map(sf_resid_fold5_mammal, 5), knb10_mammal, moran.test)
+
+moran_mammal_0.8k1 <- map2(map(sf_resid_fold5_mammal, 6), knb1_mammal, moran.test)
+moran_mammal_0.8k2 <- map2(map(sf_resid_fold5_mammal, 6), knb2_mammal, moran.test)
+moran_mammal_0.8k3 <- map2(map(sf_resid_fold5_mammal, 6), knb3_mammal, moran.test)
+moran_mammal_0.8k4 <- map2(map(sf_resid_fold5_mammal, 6), knb4_mammal, moran.test)
+moran_mammal_0.8k5 <- map2(map(sf_resid_fold5_mammal, 6), knb5_mammal, moran.test)
+moran_mammal_0.8k6 <- map2(map(sf_resid_fold5_mammal, 6), knb6_mammal, moran.test)
+moran_mammal_0.8k7 <- map2(map(sf_resid_fold5_mammal, 6), knb7_mammal, moran.test)
+moran_mammal_0.8k8 <- map2(map(sf_resid_fold5_mammal, 6), knb8_mammal, moran.test)
+moran_mammal_0.8k9 <- map2(map(sf_resid_fold5_mammal, 6), knb9_mammal, moran.test)
+moran_mammal_0.8k10 <- map2(map(sf_resid_fold5_mammal, 6), knb10_mammal, moran.test)
+
+moran_mammal_0.7k1 <- map2(map(sf_resid_fold5_mammal, 7), knb1_mammal, moran.test)
+moran_mammal_0.7k2 <- map2(map(sf_resid_fold5_mammal, 7), knb2_mammal, moran.test)
+moran_mammal_0.7k3 <- map2(map(sf_resid_fold5_mammal, 7), knb3_mammal, moran.test)
+moran_mammal_0.7k4 <- map2(map(sf_resid_fold5_mammal, 7), knb4_mammal, moran.test)
+moran_mammal_0.7k5 <- map2(map(sf_resid_fold5_mammal, 7), knb5_mammal, moran.test)
+moran_mammal_0.7k6 <- map2(map(sf_resid_fold5_mammal, 7), knb6_mammal, moran.test)
+moran_mammal_0.7k7 <- map2(map(sf_resid_fold5_mammal, 7), knb7_mammal, moran.test)
+moran_mammal_0.7k8 <- map2(map(sf_resid_fold5_mammal, 7), knb8_mammal, moran.test)
+moran_mammal_0.7k9 <- map2(map(sf_resid_fold5_mammal, 7), knb9_mammal, moran.test)
+moran_mammal_0.7k10 <- map2(map(sf_resid_fold5_mammal, 7), knb10_mammal, moran.test)
+
+moran_mammal_0.6k1 <- map2(map(sf_resid_fold5_mammal, 8), knb1_mammal, moran.test)
+moran_mammal_0.6k2 <- map2(map(sf_resid_fold5_mammal, 8), knb2_mammal, moran.test)
+moran_mammal_0.6k3 <- map2(map(sf_resid_fold5_mammal, 8), knb3_mammal, moran.test)
+moran_mammal_0.6k4 <- map2(map(sf_resid_fold5_mammal, 8), knb4_mammal, moran.test)
+moran_mammal_0.6k5 <- map2(map(sf_resid_fold5_mammal, 8), knb5_mammal, moran.test)
+moran_mammal_0.6k6 <- map2(map(sf_resid_fold5_mammal, 8), knb6_mammal, moran.test)
+moran_mammal_0.6k7 <- map2(map(sf_resid_fold5_mammal, 8), knb7_mammal, moran.test)
+moran_mammal_0.6k8 <- map2(map(sf_resid_fold5_mammal, 8), knb8_mammal, moran.test)
+moran_mammal_0.6k9 <- map2(map(sf_resid_fold5_mammal, 8), knb9_mammal, moran.test)
+moran_mammal_0.6k10 <- map2(map(sf_resid_fold5_mammal, 8), knb10_mammal, moran.test)
+
+moran_mammal_0.5k1 <- map2(map(sf_resid_fold5_mammal, 9), knb1_mammal, moran.test)
+moran_mammal_0.5k2 <- map2(map(sf_resid_fold5_mammal, 9), knb2_mammal, moran.test)
+moran_mammal_0.5k3 <- map2(map(sf_resid_fold5_mammal, 9), knb3_mammal, moran.test)
+moran_mammal_0.5k4 <- map2(map(sf_resid_fold5_mammal, 9), knb4_mammal, moran.test)
+moran_mammal_0.5k5 <- map2(map(sf_resid_fold5_mammal, 9), knb5_mammal, moran.test)
+moran_mammal_0.5k6 <- map2(map(sf_resid_fold5_mammal, 9), knb6_mammal, moran.test)
+moran_mammal_0.5k7 <- map2(map(sf_resid_fold5_mammal, 9), knb7_mammal, moran.test)
+moran_mammal_0.5k8 <- map2(map(sf_resid_fold5_mammal, 9), knb8_mammal, moran.test)
+moran_mammal_0.5k9 <- map2(map(sf_resid_fold5_mammal, 9), knb9_mammal, moran.test)
+moran_mammal_0.5k10 <- map2(map(sf_resid_fold5_mammal, 9), knb10_mammal, moran.test)
+
+```
+
+```{r Y axis, Moran's I with different "K", different "Threshold"}
+
+mammal_Y_moran <- tibble::tibble(moran_0.5k1 = unlist(map(moran_mammal_0.5k1, c(3,1))),
+                                  moran_0.5k2 = unlist(map(moran_mammal_0.5k2, c(3,1))),
+                                  moran_0.5k3 = unlist(map(moran_mammal_0.5k3, c(3,1))),
+                                  moran_0.5k4 = unlist(map(moran_mammal_0.5k4, c(3,1))),
+                                  moran_0.5k5 = unlist(map(moran_mammal_0.5k5, c(3,1))),
+                                  moran_0.5k6 = unlist(map(moran_mammal_0.5k6, c(3,1))),
+                                  moran_0.5k7 = unlist(map(moran_mammal_0.5k7, c(3,1))),
+                                  moran_0.5k8 = unlist(map(moran_mammal_0.5k8, c(3,1))),
+                                  moran_0.5k9 = unlist(map(moran_mammal_0.5k9, c(3,1))),
+                                  moran_0.5k10 = unlist(map(moran_mammal_0.5k10, c(3,1))),
+                                  moran_0.6k1 = unlist(map(moran_mammal_0.6k1, c(3,1))),
+                                  moran_0.6k2 = unlist(map(moran_mammal_0.6k2, c(3,1))),
+                                  moran_0.6k3 = unlist(map(moran_mammal_0.6k3, c(3,1))),
+                                  moran_0.6k4 = unlist(map(moran_mammal_0.6k4, c(3,1))),
+                                  moran_0.6k5 = unlist(map(moran_mammal_0.6k5, c(3,1))),
+                                  moran_0.6k6 = unlist(map(moran_mammal_0.6k6, c(3,1))),
+                                  moran_0.6k7 = unlist(map(moran_mammal_0.6k7, c(3,1))),
+                                  moran_0.6k8 = unlist(map(moran_mammal_0.6k8, c(3,1))),
+                                  moran_0.6k9 = unlist(map(moran_mammal_0.6k9, c(3,1))),
+                                  moran_0.6k10 = unlist(map(moran_mammal_0.6k10, c(3,1))),
+                                  moran_0.7k1 = unlist(map(moran_mammal_0.7k1, c(3,1))),
+                                  moran_0.7k2 = unlist(map(moran_mammal_0.7k2, c(3,1))),
+                                  moran_0.7k3 = unlist(map(moran_mammal_0.7k3, c(3,1))),
+                                  moran_0.7k4 = unlist(map(moran_mammal_0.7k4, c(3,1))),
+                                  moran_0.7k5 = unlist(map(moran_mammal_0.7k5, c(3,1))),
+                                  moran_0.7k6 = unlist(map(moran_mammal_0.7k6, c(3,1))),
+                                  moran_0.7k7 = unlist(map(moran_mammal_0.7k7, c(3,1))),
+                                  moran_0.7k8 = unlist(map(moran_mammal_0.7k8, c(3,1))),
+                                  moran_0.7k9 = unlist(map(moran_mammal_0.7k9, c(3,1))),
+                                  moran_0.7k10 = unlist(map(moran_mammal_0.7k10, c(3,1))),
+                                  moran_0.8k1 = unlist(map(moran_mammal_0.8k1, c(3,1))),
+                                  moran_0.8k2 = unlist(map(moran_mammal_0.8k2, c(3,1))),
+                                  moran_0.8k3 = unlist(map(moran_mammal_0.8k3, c(3,1))),
+                                  moran_0.8k4 = unlist(map(moran_mammal_0.8k4, c(3,1))),
+                                  moran_0.8k5 = unlist(map(moran_mammal_0.8k5, c(3,1))),
+                                  moran_0.8k6 = unlist(map(moran_mammal_0.8k6, c(3,1))),
+                                  moran_0.8k7 = unlist(map(moran_mammal_0.8k7, c(3,1))),
+                                  moran_0.8k8 = unlist(map(moran_mammal_0.8k8, c(3,1))),
+                                  moran_0.8k9 = unlist(map(moran_mammal_0.8k9, c(3,1))),
+                                  moran_0.8k10 = unlist(map(moran_mammal_0.8k10, c(3,1))),
+                                  moran_0.9k1 = unlist(map(moran_mammal_0.9k1, c(3,1))),
+                                  moran_0.9k2 = unlist(map(moran_mammal_0.9k2, c(3,1))),
+                                  moran_0.9k3 = unlist(map(moran_mammal_0.9k3, c(3,1))),
+                                  moran_0.9k4 = unlist(map(moran_mammal_0.9k4, c(3,1))),
+                                  moran_0.9k5 = unlist(map(moran_mammal_0.9k5, c(3,1))),
+                                  moran_0.9k6 = unlist(map(moran_mammal_0.9k6, c(3,1))),
+                                  moran_0.9k7 = unlist(map(moran_mammal_0.9k7, c(3,1))),
+                                  moran_0.9k8 = unlist(map(moran_mammal_0.9k8, c(3,1))),
+                                  moran_0.9k9 = unlist(map(moran_mammal_0.9k9, c(3,1))),
+                                  moran_0.9k10 = unlist(map(moran_mammal_0.9k10, c(3,1))),
+                                  moran_1k1 = unlist(map(moran_mammal_1k1, c(3,1))),
+                                  moran_1k2 = unlist(map(moran_mammal_1k2, c(3,1))),
+                                  moran_1k3 = unlist(map(moran_mammal_1k3, c(3,1))),
+                                  moran_1k4 = unlist(map(moran_mammal_1k4, c(3,1))),
+                                  moran_1k5 = unlist(map(moran_mammal_1k5, c(3,1))),
+                                  moran_1k6 = unlist(map(moran_mammal_1k6, c(3,1))),
+                                  moran_1k7 = unlist(map(moran_mammal_1k7, c(3,1))),
+                                  moran_1k8 = unlist(map(moran_mammal_1k8, c(3,1))),
+                                  moran_1k9 = unlist(map(moran_mammal_1k9, c(3,1))),
+                                  moran_1k10 = unlist(map(moran_mammal_1k10, c(3,1))),
+                                  nb_0.05 = nb_mammal)
+
+```
+
+```{r X axis, Niche breadth from different Quantile, different ordination}
+#from 0.05~0.95 
+
+nb_mammal <- nb_mammal[-31]
+nb_mammal <- nb_mammal[-26]
+
+mammal_X_nb <- data.frame(nb_mammal)
+
+
+```
+
+```{r X + Y}
+
+mammal_XY <- mutate(mammal_Y_moran, nb_0.05 = mammal_X_nb)
+mammal_XY_df <- as.data.frame(mammal_XY)
+```
+
+```{r}
+p <- ggplot(data = mammal_Y_moran) +
+    geom_point(aes(x = nb_0.05, y = moran_1k1, color = 1)) +
+    geom_smooth(aes(x = nb_0.05, y= moran_1k10), method = "lm") +
+    geom_point(aes(x = nb_0.05, y = moran_1k2, color = 2)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k3, color = 3)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k4, color = 4)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k5, color = 5)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k6, color = 6)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k7, color = 7)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k8, color = 8)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k9, color = 9)) +
+    geom_point(aes(x = nb_0.05, y = moran_1k10, color = 10)) +
+    labs(title = "Residuals of SDM", 
+    subtitle = "Can niche breadth predict ",
+    x = "Climatic Niche Breadth", y = "Residual Moran's I") +
+    theme_bw()
+
+
+
+```
+
+```{r}
+q <- ggplot(data = mammal_Y_moran) +
+    geom_point(aes(x = nb_0.05, y = moran_1k1, color = 1)) +
+    geom_smooth(aes(x = nb_0.05, y= moran_1k10), method = "lm") +
+    geom_point(aes(x = nb_0.05, y = moran_1k10, color = 10)) +
+    labs(title = "Residuals of SDM", 
+    subtitle = "Can niche breadth predict?",
+    x = "Climatic Niche Breadth", y = "Residual Moran's I") +
+    theme_bw()
+
+scatter_morannb <- function(y){ggplot(data = mammal_Y_moran) +
+                                  geom_point(aes(x = nb_0.05, y = y)) + 
+                                  geom_smooth(aes(x = nb_0.05, y = y), method = "lm")}
+  
+all_scatter<- map(mammal_Y_moran[1:60], scatter_morannb)
+
+
+map2(ggname_save, all_scatter, ggsave)
+
+a <- list(1:60)
+
+ggname <- read_csv("E:/residual_sdm/species_mammal.csv", col_names = "scientificName", skip = 1)
+ggname<- ggname[-31,]
+ggname <- ggname[-26,]
+ggname <- as.list(ggname)
+ggname_save <- paste0("E:/",1:60,".png")
+```
+
+
+
+
+```{r}
+p <- ggplot(data = mammal_Y_moran) +
+    geom_smooth(aes(x = nb_0.05, y= moran_0.9k10), method = "lm") +
+    labs(title = "Residuals of SDM", 
+    subtitle = "Can niche breadth predict ",
+    x = "Climatic Niche Breadth", y = "Residual Moran's I") +
+    theme_bw()
 ```
 
 
@@ -1062,11 +1416,35 @@ Note that the `echo = FALSE` parameter was added to the code chunk to prevent pr
 
 # 토론 Discussion
 
-Top 4 variable really mattered for MAXENT model?
+1. ROWs. SAMPLEs
+random K-fold enough? Spatial Cross validation? Mahalanobis?
 
+1.1 마할라노비스
+
+BioClim 모델이 있을적 초창기 방법.
+-> 선형성 한계
+-> 아웃라이어에 민감하지 않다?
+
+1.2 
+
+1.3 
+
+1.4 environmental filter 
+Varela et al. 2014에 의해 제시
+
+2. COLUMMs. VARIABLEs.
 Does standardized matter? PCA? Factor loading?
 
+Top 4 variable really mattered for MAXENT model?
+
+3. MODEL RESIDUAL
 How much threshold will be good to caculate?
+디스모에서는 threshold() 함수를 통해 0~100 predict 값을 binary 데이터로 제시.
+
+
+
+
+
 
 
 ```{r extracted value visualize}
@@ -1142,6 +1520,12 @@ library("BAT") #biodiversity
 library("lime") #xAI
 library("SDMtune")
 library(leaflet)
+install.packages("MaxentVariableSelection")
+install.packages("MaxentVariableSelection")
+install.packages("MaxentVariableSelection")
+install.packages("MaxentVariableSelection")
+remotes::install_github('adamlilith/enmSdm', dependencies=TRUE)
+ENMeval
 ```
 
 # Reference
