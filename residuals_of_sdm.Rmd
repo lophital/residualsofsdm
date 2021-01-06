@@ -1307,7 +1307,7 @@ mammal_X_nb <- data.frame(nb_mammal)
 
 ```
 
-```{r X + Y}
+```{r X + Y...}
 
 mammal_XY <- mutate(mammal_Y_moran, nb_0.05 = mammal_X_nb)
 mammal_XY_df <- as.data.frame(mammal_XY)
